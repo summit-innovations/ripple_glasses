@@ -72,9 +72,9 @@ void setup() {
 
   // Defined in thingProperties.h
   initProperties();
-  while (1) {
-    delay(50);
-  }
+  // while (1) {
+  //   delay(50);
+  // }
   queue_setup();
 }
 

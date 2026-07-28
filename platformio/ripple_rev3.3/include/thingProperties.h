@@ -42,17 +42,12 @@ void initProperties(){
   
   //Configure I2S protocol
   config_i2s();
-  // I2S.setPins(I2S_SCK, I2S_WS, -1, I2S_SD);
-  // while (!I2S.begin(I2S_MODE_STD, SAMPLE_RATE, I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO)) {
-  //   Serial.println("Failed to initialize I2S!");
-  //   delay (100); // do nothing
-  // }
 
   //Create PSRAM buffer
-  Serial.println((int) FULL_CHUNK_BYTES);
-  Serial.println((int) RAW_CHUNK_BYTES);
-  Serial.printf("PSRAM found: %s\n", psramFound() ? "yes" : "no");
-  Serial.printf("PSRAM total: %d, free: %d\n", ESP.getPsramSize(), ESP.getFreePsram());
+  // Serial.println((int) FULL_CHUNK_BYTES);
+  // Serial.println((int) RAW_CHUNK_BYTES);
+  // Serial.printf("PSRAM found: %s\n", psramFound() ? "yes" : "no");
+  // Serial.printf("PSRAM total: %d, free: %d\n", ESP.getPsramSize(), ESP.getFreePsram());
   audio_buffer = (uint8_t*)ps_malloc((int) FULL_CHUNK_BYTES);
   raw_buffer = (int32_t *)ps_malloc((int) RAW_CHUNK_BYTES);
   
