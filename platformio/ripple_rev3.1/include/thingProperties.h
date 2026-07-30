@@ -1,14 +1,10 @@
 #pragma once
 
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include "wifi_connect.h"
+// #include <ESP_I2S.h>
 #include "config.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/semphr.h"
-#include "cert.h"
 
 //Mic recording definitions
 #define V_REF 3.3
@@ -24,34 +20,31 @@
 //Wifi/Database keys
 const char* ssid = "SamuelF"; //TP-LINK_AB77 //BYU-WiFi //SamuelF
 const char* password = "samb@r@y"; //21940521 //samb@r@y
-const String url = "https://summit-innovative.duckdns.org";
-const String audio_ext = "/upload/";
-const String access_key = "c18ec4ba23d30007f7b6a304d79762db3f6f69eecc7fbded89949a6c3ac5f24c";
+const String url = "https://gctbnsjsridmsilzqtpq.storage.supabase.co/storage/v1/object";
+const String audio_ext = "/audio/public/file_";
+const String access_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdjdGJuc2pzcmlkbXNpbHpxdHBxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNjM0ODksImV4cCI6MjA5MDYzOTQ4OX0.T7OdeAuH0AM0a8YdzWAcwH1e6rkGFaL4stL4DWttbZg";
 
 HTTPClient home;
-WiFiClientSecure secure_client;
-
-QueueHandle_t send_queue;
-QueueHandle_t free_queue;
 
 int32_t* raw_buffer = NULL;
 uint8_t * audio_buffer = NULL;
+
 
 void initProperties(){
   //Configure button
   
   //Configure I2S protocol
   config_i2s();
+  // I2S.setPins(I2S_SCK, I2S_WS, -1, I2S_SD);
+  // while (!I2S.begin(I2S_MODE_STD, SAMPLE_RATE, I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO)) {
+  //   Serial.println("Failed to initialize I2S!");
+  //   delay (100); // do nothing
+  // }
 
   //Create PSRAM buffer
-  // Serial.println((int) FULL_CHUNK_BYTES);
-  // Serial.println((int) RAW_CHUNK_BYTES);
-  // Serial.printf("PSRAM found: %s\n", psramFound() ? "yes" : "no");
-  // Serial.printf("PSRAM total: %d, free: %d\n", ESP.getPsramSize(), ESP.getFreePsram());
-  audio_buffer = (uint8_t*)ps_malloc((int) FULL_CHUNK_BYTES);
-  raw_buffer = (int32_t *)ps_malloc((int) RAW_CHUNK_BYTES);
-  
-  if (!audio_buffer || !raw_buffer) {
+  audio_buffer = (uint8_t*)ps_malloc(FULL_CHUNK_BYTES);
+  raw_buffer = (int32_t *)ps_malloc(RAW_CHUNK_BYTES);
+  if (!audio_buffer && !raw_buffer) {
     Serial.println("PSRAM allocation failed");
     while (1);
   }
@@ -75,7 +68,6 @@ void initProperties(){
   Serial.println(WiFi.localIP());
 
   //Set up database socket
-  secure_client.setCACert(ROOT_CA);
   home.setReuse(true);
 }
 
@@ -98,12 +90,19 @@ void amp_cov(int32_t* r_buffer, uint8_t* a_buffer) {
   }
 }
 
-void record() {
+int fsmrecordAndUpload() {
+  static int response = -1;
+  String obj_key;
   size_t bytes_read = 0;
   size_t bytes_collected = 0;
-  do {
-    i2s_read(I2S_PORT, (uint8_t*) raw_buffer + bytes_collected, RAW_CHUNK_BYTES - bytes_collected, &bytes_read, portMAX_DELAY);
+  while (bytes_collected < RAW_CHUNK_BYTES) {
+    i2s_read(I2S_PORT, raw_buffer + bytes_collected, RAW_CHUNK_BYTES, &bytes_read, portMAX_DELAY);
     bytes_collected += bytes_read;
-  } while (bytes_collected < RAW_CHUNK_BYTES);
+  }
+  amp_cov(raw_buffer, audio_buffer);
+  obj_key =   "0.wav"; //(String)(name%2)+
+  response = upload_audio(home, url+audio_ext+obj_key, audio_buffer, FULL_CHUNK_BYTES, access_key);
+  return response;
+  
 }
 

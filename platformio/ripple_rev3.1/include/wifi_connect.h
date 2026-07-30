@@ -1,7 +1,6 @@
 #pragma once
 
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
 int status = WL_IDLE_STATUS;
@@ -26,6 +25,14 @@ void wifi_scan(){
       Serial.print(WiFi.RSSI(i)); // Signal strength
     }
   }
+}
+
+int send_mes(HTTPClient& database, const String& path, const char* header_type, const char* header, const String& mes){
+  database.begin(path);
+  database.addHeader(header_type, header);
+  int code = database.PUT(mes);
+  database.end();
+  return code;
 }
 
 void writeWavHeader(uint8_t* header, uint32_t dataSize, uint32_t sampleRate) {
@@ -59,16 +66,18 @@ void writeWavHeader(uint8_t* header, uint32_t dataSize, uint32_t sampleRate) {
   header[42] = ((dataSize >> 16) & 0xff); header[43] = ((dataSize >> 24) & 0xff);
 }
 
-int upload_audio(HTTPClient& database, WiFiClientSecure& secure_client, const String& path, uint8_t* buffer, size_t size, const String access_key){
+int upload_audio(HTTPClient& database, const String& path, uint8_t* buffer, size_t size, const String access_key){
   uint8_t header[44];
   writeWavHeader(header, size, 16000);
-  database.begin(secure_client, path);
+  database.begin(path);
   database.addHeader("Content-Type", "audio/wav");
-  database.addHeader("X-API-Key", access_key);
+  database.addHeader("Authorization", "Bearer " + access_key);
+  database.addHeader("apikey", access_key);
+  database.addHeader("x-upsert", "true");
   uint8_t* fullfile = (uint8_t*)malloc(44+size);
   memcpy(fullfile, header, 44);
   memcpy(fullfile+44, buffer, size);
-  int code = database.PUT(fullfile, size+44);
+  int code = database.POST(fullfile, size+44);
   String response = database.getString();
   // Serial.printf("HTTP %d, %s\n", code, response.c_str());
   free(fullfile);

@@ -26,6 +26,9 @@ void record_task(void* param) {
     xQueueReceive(free_queue, &audio_buffer, portMAX_DELAY);
     // Serial.println("Received freed audio_buffer");
     amp_cov(raw_buffer, audio_buffer);
+    // for(int i = 0; i < SAMPLES_PER_CHUNK; i++) {
+    //   Serial.printf("%x\n", audio_buffer[i]);
+    // }
     // Send filled and converted audio buffer to upload task
     xQueueSend(send_queue, &audio_buffer, portMAX_DELAY);
     // Reviews memory left in task, increase or decrease memory task from this statement
@@ -72,9 +75,7 @@ void setup() {
 
   // Defined in thingProperties.h
   initProperties();
-  // while (1) {
-  //   delay(50);
-  // }
+  
   queue_setup();
 }
 
