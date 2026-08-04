@@ -1,0 +1,119 @@
+#pragma once
+
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+#include "wifi_connect.h"
+#include "config.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "cert.h"
+
+//Mic recording definitions
+#define V_REF 3.3
+#define SAMPLE_RATE 16000 //Samples per second
+#define BYTES_PER_RAW_SAMPLE 4
+#define BYTES_PER_FULL_SAMPLE 3
+#define CHUNK_SECONDS 2
+#define SAMPLES_PER_CHUNK (SAMPLE_RATE*CHUNK_SECONDS)
+#define RAW_CHUNK_BYTES (SAMPLES_PER_CHUNK * BYTES_PER_RAW_SAMPLE)
+#define FULL_CHUNK_BYTES (SAMPLES_PER_CHUNK * BYTES_PER_FULL_SAMPLE)
+#define VOLUME_GAIN 0
+
+//Wifi/Database keys
+const char* ssid = "SamuelF"; //TP-LINK_AB77 //BYU-WiFi //SamuelF
+const char* password = "samb@r@y"; //21940521 //samb@r@y
+const String url = "https://summit-innovative.duckdns.org";
+const String audio_ext = "/upload/";
+const String access_key = "c18ec4ba23d30007f7b6a304d79762db3f6f69eecc7fbded89949a6c3ac5f24c";
+
+HTTPClient home;
+WiFiClientSecure secure_client;
+
+QueueHandle_t send_queue;
+QueueHandle_t free_queue;
+
+int32_t* raw_buffer = NULL;
+uint8_t * audio_buffer = NULL;
+
+typedef enum {TRAINING, REALTIME} UploadState;
+UploadState upload_state;
+
+void initProperties(){
+  //Configure button
+  
+  //Configure I2S protocol
+  config_i2s();
+
+  //Create PSRAM buffer
+  // Serial.println((int) FULL_CHUNK_BYTES);
+  // Serial.println((int) RAW_CHUNK_BYTES);
+  // Serial.printf("PSRAM found: %s\n", psramFound() ? "yes" : "no");
+  // Serial.printf("PSRAM total: %d, free: %d\n", ESP.getPsramSize(), ESP.getFreePsram());
+  audio_buffer = (uint8_t*)ps_malloc((int) FULL_CHUNK_BYTES);
+  raw_buffer = (int32_t *)ps_malloc((int) RAW_CHUNK_BYTES);
+  
+  if (!audio_buffer || !raw_buffer) {
+    Serial.println("PSRAM allocation failed");
+    while (1);
+  }
+
+  //Connect to wifi
+  Serial.println();
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(100);
+    Serial.print(".");
+  }
+
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  //Set up database socket
+  secure_client.setCACert(ROOT_CA);
+  home.setReuse(true);
+
+  //Determine what state we want to be in (realtime or training uploads)
+  // Write FSM machine
+
+  // Set the file name variable so it uploads appropriately
+  // If the state is realtime, set the filename to alternate between 0 and 1
+  // If the state is training, query the server, find the oldest file number, and put the file name to the number after that
+}
+
+void amp_cov(int32_t* r_buffer, uint8_t* a_buffer) {
+  int32_t raw32;
+  for(size_t i = 0; i < SAMPLES_PER_CHUNK; i++) {
+    // Serial.print("Raw 32 bit integer: ");
+    // Serial.print(r_buffer[i], HEX);
+    // Serial.println();
+    raw32 = r_buffer[i] >> 8;
+    raw32 <<= VOLUME_GAIN;
+    a_buffer[(i*3)] = (uint8_t)((int32_t)raw32 & 0xFF);
+    a_buffer[(i*3)+1] = (uint8_t)(((int32_t)raw32 >> 8) & 0xFF);
+    a_buffer[(i*3)+2] = (uint8_t)(((int32_t)raw32 >> 16) & 0xFF);     
+    // Serial.print("Full 24 bit integer: ");
+    // Serial.print(a_buffer[(i*3)], HEX);
+    // Serial.print(a_buffer[(i*3)+1], HEX);
+    // Serial.print(a_buffer[(i*3)+2], HEX);
+    // Serial.println();
+  }
+}
+
+void record() {
+  size_t bytes_read = 0;
+  size_t bytes_collected = 0;
+  do {
+    i2s_channel_read(rx_handle, (uint8_t*) raw_buffer + bytes_collected, RAW_CHUNK_BYTES - bytes_collected, &bytes_read, portMAX_DELAY);
+    bytes_collected += bytes_read;
+  } while (bytes_collected < RAW_CHUNK_BYTES);
+}
+
