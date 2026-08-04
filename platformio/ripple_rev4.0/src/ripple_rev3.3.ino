@@ -59,12 +59,24 @@ void send_task(void* param) {
   }
 }
 
+void cfg_upload_task(void* param) {
+  while(true) {
+    // Run FSM
+    xQueueReceive(config_queue, &upload_cnf, portMAX_DELAY);
+    upload_cnf = cnf_fsm(upload_state);
+    xQueueSend(config_queue, &upload_cnf, portMAX_DELAY);
+  }
+}
+
 void queue_setup() {
   send_queue = xQueueCreate(1, sizeof(uint8_t*)); // Sending audio buffer after recording and amplifying
   free_queue = xQueueCreate(1, sizeof(uint8_t*)); // Releasing audio buffer after uploading
+  config_queue = xQueueCreate(1, sizeof(UploadConfig));
   xQueueSend(free_queue, &audio_buffer, 0);
+  xQueueSend(config_queue, &upload_cnf, 0);
   xTaskCreatePinnedToCore(record_task, "Record", 4096, NULL, 1, NULL, 0);
   xTaskCreatePinnedToCore(send_task, "Send", 8192, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore()
 }
 
 void setup() {

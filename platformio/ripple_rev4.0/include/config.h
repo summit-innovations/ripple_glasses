@@ -2,13 +2,17 @@
 
 #include <driver/i2s_std.h>
 
+#define RT_BUTTON_PIN 33
+#define T_BUTTON_PIN 13
+#define RT_LED_PIN 26
+#define T_LED_PIN 12
+#define WAIT_LED_PIN 25
 #define I2S_WS ((gpio_num_t) 27)
 #define I2S_SCK ((gpio_num_t) 14)
 #define I2S_SD ((gpio_num_t) 32)
 #define I2S_PORT I2S_NUM_0
 
 i2s_chan_handle_t rx_handle;
-
 
 void config_i2s() {
   Serial.println("Configuring mic pins");
@@ -26,10 +30,22 @@ void config_i2s() {
     },
   };
   std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
-  i2s_channel_init_std_mode(rx_handle, &std_cfg);
-  i2s_channel_enable(rx_handle);
   ESP_ERROR_CHECK(i2s_channel_init_std_mode(rx_handle, &std_cfg));
   ESP_ERROR_CHECK(i2s_channel_enable(rx_handle));
   Serial.println("Mic pins configured correctly!!");
+}
+
+void config_fsm() {
+  pinMode(RT_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(T_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(RT_LED_PIN, OUTPUT);
+  pinMode(T_LED_PIN, OUTPUT);
+  pinMode(WAIT_LED_PIN, OUTPUT);
+  Serial.println("GPIO pin configuration successful");
+}
+
+void pin_config() {
+  config_fsm();
+  config_i2s();
 }
 
