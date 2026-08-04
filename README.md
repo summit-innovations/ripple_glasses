@@ -14,19 +14,13 @@ sudo apt install python3 python3-pip python3-venv
 4. Add the Platform IO extension. [These](https://docs.platformio.org/en/latest/integration/ide/vscode.html#quick-start) instructions can give you more detail if needed.
 5. Navigate to the revision you would like to update/explore on your terminal
 6. Execute the command `code {folder to open}`. If the revision does not exist yet, navigate to Platform IO home and add your project by Creating New Project. Make sure you add it to the github repository in `~/crocker_fellowship/platformio`
-7. Link the device to your project. Since WSL2 can't access the device scanner, we must manually link it. Run the following commands in windows PowerShell as administrato:
-	- `winget install usbipd`
-	- `usbipd list`
-	- Find your board on the list (should be something like "Silicon Labs CP210x USB to UART Bridge") and note its BUSID
-	- Bind the board `usbipd bind --busid <BUSID>`
-	- Attach it to WSL `usbipd attach --wsl --busid <BUSID>`
-	- Verify that it exists in WSL (move to a WSL terminal) `ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null`
+7. Link the device to your project. Refer to the header __Linking to WSL__ for more information.
 8. Ensure that the baud rate in the `src/` folder matches the `platformio.ini` file. If unsure, explicitly define it in `platformio.ini` to match what is in `src/`:
 ```
 monitor_speed = {BAUD_RATE}
 ```
-8. Try uploading it. Everything should work now! After uploading, you can access the serial monitor on the PlatformIO terminal "Monitor" tab.
-9. If you have issues with PSRAM allocation, follow this:
+9. Try uploading it. Everything should work now! After uploading, you can access the serial monitor on the PlatformIO terminal "Monitor" tab.
+10. If you have issues with PSRAM allocation, follow this:
 	- In `platformio.ini`, add 
 ```
 board_build.arduino.memory_type = qio_qspi
@@ -37,7 +31,7 @@ build_flags =
 	- Run `pio run --target clean`
 	- Run `pio run`
 	- PSRAM should allocate correctly now
-10. If you have issues running `pio` commands from the VS terminal, follow this:
+11. If you have issues running `pio` commands from the VS terminal, follow this:
 	- Run `find ~/.platformio -iname "pio" 2>/dev/null`
 	- Take the output from that command and use it here: 
 ```
@@ -47,6 +41,42 @@ which pio
 pio --version
 ```
 	- You should now be able to use `pio` commands in the terminal
+
+## Linking to WSL
+
+Since WSL2 can't access the device scanner within Windows, we must manually bind the new device to WSL for PlatformIO to use. I wrote
+a PowerShell script - with the help of AI - that should bind an already-registered device to WSL when connected/reconnected. That script
+is found within the main directory of this repo at `Scripts/usbipd-auto-attach`. To get it to work on your computer, run the following
+command within PowerShell as an administrator:
+	1. Add the directory `Scripts/usbipd-auto-attach` to a local location on
+your Windows environment. Make sure to note the full file path. 
+	2. Connect the microcontroller via USB
+	3. Execute `usbipd list` on the command line and search for your MCU.
+It should say something like `Silicon Labs CP210x USB to UART Bridge` followed
+by the port number. Store for later use the number under the column `VID:PID`.
+	4. Run the following commands:
+```
+$action  = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"C:\path\to\file\Scripts\usbipd-auto-attach.ps1`" -HardwareId <VID:PID>"
+$trigger = New-ScheduledTaskTrigger -AtLogOn
+Register-ScheduledTask -TaskName "usbipd-auto-attach-<VID:PID>" -Action $action -Trigger $trigger -RunLevel Limited -Force
+```
+This task should now run in the background whenever you log into Windows. 
+	5. Confirm that the task was generated correctly by running `(Get-ScheduledTask -TaskName "usbipd-auto-attach").Actions | Select-Object Execute, Arguments`,
+verifying that the arguments and flags are all correct (especially the VID:PID)
+	6. Log off and back on and verify that the task is running by executing `Get-ScheduledTask -TaskName "usbipd-auto-attach*"`.
+The status should be `Running` or `Ready`. You can also run `Get-ScheduledTask -TaskName "usbipd-auto-attach" | Get-ScheduledTaskInfo`
+to ensure everything is working correctly. 
+	
+When adding a new device, repeat steps 3-6, which essentially creates a new process
+for the new device. Your last check should be uploading to the device on PlatformIO. If it uploads successfully, you're done! If not, you might have to do some more debugging. If you don't want to have extra processes running
+on your system, follow the steps below for a one-time bind to WSL:
+        - `winget install usbipd`
+        - `usbipd list`
+        - Find your board on the list (should be something like "Silicon Labs CP210x USB to UART Bridge") and note its BUSID
+        - Bind the board `usbipd bind --busid <BUSID>`
+        - Attach it to WSL `usbipd attach --wsl --busid <BUSID>`
+        - Verify that it exists in WSL (move to a WSL terminal) `ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null`
+
 ## Changelog
 
 - 1/13/2026 Arduino MKR WiFi 1010 was received
@@ -70,3 +100,4 @@ pio --version
 - 4/8/2026 Completed Rev 1.3, able to capture sound bites 5 seconds i>
 - 7/28/2026 Migrated to platformIO and updated git repo
 - 8/4/2026: Updated I2S config for deprecated libraries
+- 8/4/2026: Added script for binding devices to platformio running in WSL
