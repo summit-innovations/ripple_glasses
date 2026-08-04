@@ -69,4 +69,4 @@ pio --version
 - 3/20/2026 Shifted to new prototype (Ripple Glasses)
 - 4/8/2026 Completed Rev 1.3, able to capture sound bites 5 seconds i>
 - 7/28/2026 Migrated to platformIO and updated git repo
-
+- 8/4/2026: Updated I2S config for deprecated libraries
