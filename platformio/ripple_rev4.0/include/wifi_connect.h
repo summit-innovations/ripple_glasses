@@ -70,8 +70,24 @@ int upload_audio(HTTPClient& database, WiFiClientSecure& secure_client, const St
   memcpy(fullfile+44, buffer, size);
   int code = database.PUT(fullfile, size+44);
   String response = database.getString();
-  // Serial.printf("HTTP %d, %s\n", code, response.c_str());
+  Serial.printf("HTTP %d, %s\n", code, response.c_str());
   free(fullfile);
   database.end();
   return code;
+}
+
+long get_filenum(HTTPClient &server, WiFiClientSecure& secure_client, const String& path, const String access_key) {
+  server.begin(secure_client, path);
+  server.addHeader("X-API-Key", access_key);
+  int code = server.GET();
+  String payload = server.getString();
+  if (code == 200) {
+    // Serial.printf("Payload respone: %s\n", payload);
+    return payload.toInt();
+  }
+  else {
+    // Serial.printf("Error code: %d\n", code);
+    // Serial.printf("Payload respone: %s\n", payload);
+    return -1;
+  }
 }

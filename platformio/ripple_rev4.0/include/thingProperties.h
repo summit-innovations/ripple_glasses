@@ -27,6 +27,7 @@ const char* password = "samb@r@y"; //21940521 //samb@r@y
 const String url = "https://summit-innovative.duckdns.org";
 const String training_ext = "/training/";
 const String realtime_ext = "/realtime/";
+const String filename_ext = "/training/latest-filename";
 const String access_key = "c18ec4ba23d30007f7b6a304d79762db3f6f69eecc7fbded89949a6c3ac5f24c";
 
 HTTPClient home;
@@ -61,7 +62,7 @@ typedef struct {
 ButtonTracker rt_button = {RT_BUTTON_PIN};
 ButtonTracker t_button = {T_BUTTON_PIN};
 
-ButtonTracker get_bt_state(ButtonTracker button){
+void get_bt_state(ButtonTracker& button){
   //Look for button press
   const static unsigned long debounce_t = 50;
   bool reading = digitalRead(button.pin);
@@ -70,7 +71,7 @@ ButtonTracker get_bt_state(ButtonTracker button){
   if (reading != button.last_reading) {
     button.last_bounce = millis();
   }
-  Serial.printf("Current State: %d\n", button.current_state);
+  // Serial.printf("Current State: %d\n", button.current_state);
   if (millis() - button.last_bounce >= debounce_t){
     switch(button.current_state){
       case DOWN:
@@ -88,7 +89,6 @@ ButtonTracker get_bt_state(ButtonTracker button){
     } 
   }
   button.last_reading = reading;
-  return button;
 }
 
 UploadState get_upld_state(ButtonState rt_button, ButtonState t_button, UploadState state_current) {
@@ -106,30 +106,58 @@ UploadState get_upld_state(ButtonState rt_button, ButtonState t_button, UploadSt
   }
 }
 
-UploadConfig cnf_fms(UploadState& upload_state) {
+UploadState upld_state_fsm(ButtonTracker& rt_button, ButtonTracker& t_button, UploadState state_current) {
+  get_bt_state(rt_button);
+  // Serial.printf("Realtime Button State: %d\n", rt_button.current_state);
+  get_bt_state(t_button);
+  // Serial.printf("Training Button State: %d\n", t_button.current_state);
+  state_current = get_upld_state(rt_button.current_state, t_button.current_state, state_current);
+  // Serial.printf("Current State: %d\n", state_current);
+  return state_current;
+}
+
+UploadConfig cnf_fsm(UploadState upload_state) {
   static UploadConfig current_cnf;
-  static int file_num = 0;
-  // Get button states
-  rt_button = get_bt_state(rt_button);
-  // Serial.printf("Realtime Button State: %d\n", rt_button);
-  t_button = get_bt_state(t_button);
-  // Serial.printf("Training Button State: %d\n", t_button);
-  upload_state = get_upld_state(rt_button.current_state, t_button.current_state, upload_state);
+  static UploadState past_up_state = WAITING;
+  static long filenum = 0;
+  // Get upload state
   // If T_BUTTON_PIN is low, turn T_LED_PIN on
+
   if (upload_state == REALTIME) {
-    digitalWrite(T_LED_PIN, LOW);
-    digitalWrite(RT_LED_PIN, HIGH);
-    current_cnf.endpoint = realtime_ext;
-    current_cnf.file_num = 0;
+    if (past_up_state != upload_state) {
+      digitalWrite(T_LED_PIN, LOW);
+      digitalWrite(RT_LED_PIN, HIGH);
+      current_cnf.endpoint = realtime_ext;
+      filenum = 0;
+    }
+    current_cnf.file_num = (filenum%2);
+    filenum++;
   }
   // If RT_BUTTON_PIN is low, turn RT_LED_PIN on
   else if(upload_state == TRAINING) {
-    digitalWrite(RT_LED_PIN, LOW);
-    digitalWrite(T_LED_PIN, HIGH);
-    current_cnf.endpoint = training_ext;
-    current_cnf.file_num = file_num;
-    file_num++;
+    if (past_up_state != upload_state) {
+      digitalWrite(RT_LED_PIN, LOW);
+      digitalWrite(T_LED_PIN, HIGH);
+      current_cnf.endpoint = training_ext;
+      long server_num = get_filenum(home, secure_client, url+filename_ext, access_key);
+      if (server_num < 0) {
+        filenum = server_num;
+      }
+      else {
+        filenum = server_num + 1;
+      }
+      
+    }
+    if (filenum < 0) {
+      current_cnf.file_num = filenum;
+    }
+    else {
+      current_cnf.file_num = filenum;
+      filenum++;
+    }
   }
+  past_up_state = upload_state;
+  return current_cnf;
 }
 
 void initProperties(){
@@ -178,25 +206,11 @@ void initProperties(){
   // If the state is realtime, set the filename to alternate between 0 and 1
   // If the state is training, query the server, find the oldest file number, and put the file name to the number after that
   digitalWrite(WAIT_LED_PIN, HIGH);
+  Serial.println("Waiting for upload state!");
   while(upload_state == WAITING) {
-    // Get button states
-    rt_button = get_bt_state(rt_button);
-    // Serial.printf("Realtime Button State: %d\n", rt_button);
-    t_button = get_bt_state(t_button);
-    // Serial.printf("Training Button State: %d\n", t_button);
-
-
-    upload_state = get_upld_state(rt_button.current_state, t_button.current_state, upload_state);
-    // If T_BUTTON_PIN is low, turn T_LED_PIN on
-    if (upload_state == REALTIME) {
-      digitalWrite(T_LED_PIN, LOW);
-      digitalWrite(RT_LED_PIN, HIGH);
-    }
-    // If RT_BUTTON_PIN is low, turn RT_LED_PIN on
-    else if(upload_state == TRAINING) {
-      digitalWrite(RT_LED_PIN, LOW);
-      digitalWrite(T_LED_PIN, HIGH);
-    }
+    upload_state = upld_state_fsm(rt_button, t_button, upload_state);
+    // Serial.printf("Upload State: %d\n", upload_state);
+    upload_cnf = cnf_fsm(upload_state);
   }
   digitalWrite(WAIT_LED_PIN, LOW);
 }

@@ -40,18 +40,22 @@ void record_task(void* param) {
 }
 
 void send_task(void* param) {
-  int num = 0;
   int response;
   int mil;
   while(true) {
     mil = millis();
     xQueueReceive(send_queue, &audio_buffer, portMAX_DELAY);
+    xQueuePeek(config_queue, &upload_state, 0);
     // Serial.println("Received filled audio_buffer");
-    response = upload_audio(home, secure_client, url+audio_ext+((String) num)+".wav", audio_buffer, FULL_CHUNK_BYTES, access_key);
+    // If the upload state has changed, reset the number to 0
+    upload_cnf = cnf_fsm(upload_state);
+    Serial.printf("Upload Config filenum: %d\n", upload_cnf.file_num);
+    String final_url = url+upload_cnf.endpoint+((String) upload_cnf.file_num)+".wav";
+    Serial.printf("URL: %s\n", final_url.c_str());
+    response = upload_audio(home, secure_client, final_url, audio_buffer, FULL_CHUNK_BYTES, access_key);
     Serial.print("Server response: ");
     Serial.println(response);
     xQueueSend(free_queue, &audio_buffer, portMAX_DELAY);
-    num++;
     // Serial.print("Send task stack remaining: ");
     // Serial.println(uxTaskGetStackHighWaterMark(NULL));
     Serial.print("Send task completed in: ");
@@ -62,21 +66,21 @@ void send_task(void* param) {
 void cfg_upload_task(void* param) {
   while(true) {
     // Run FSM
-    xQueueReceive(config_queue, &upload_cnf, portMAX_DELAY);
-    upload_cnf = cnf_fsm(upload_state);
-    xQueueSend(config_queue, &upload_cnf, portMAX_DELAY);
+    upload_state = upld_state_fsm(rt_button, t_button, upload_state);
+    xQueueOverwrite(config_queue, &upload_state);
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
 
 void queue_setup() {
   send_queue = xQueueCreate(1, sizeof(uint8_t*)); // Sending audio buffer after recording and amplifying
   free_queue = xQueueCreate(1, sizeof(uint8_t*)); // Releasing audio buffer after uploading
-  config_queue = xQueueCreate(1, sizeof(UploadConfig));
+  config_queue = xQueueCreate(1, sizeof(UploadState));
   xQueueSend(free_queue, &audio_buffer, 0);
   xQueueSend(config_queue, &upload_cnf, 0);
   xTaskCreatePinnedToCore(record_task, "Record", 4096, NULL, 1, NULL, 0);
   xTaskCreatePinnedToCore(send_task, "Send", 8192, NULL, 1, NULL, 1);
-  xTaskCreatePinnedToCore()
+  xTaskCreatePinnedToCore(cfg_upload_task, "Configure Upload", 4096, NULL, 1, NULL, tskNO_AFFINITY);
 }
 
 void setup() {
