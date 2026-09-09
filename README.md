@@ -77,6 +77,11 @@ on your system, follow the steps below for a one-time bind to WSL:
         - Attach it to WSL `usbipd attach --wsl --busid <BUSID>`
         - Verify that it exists in WSL (move to a WSL terminal) `ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null`
 
+## Development environment
+
+The full pipeline is detailed on `ripple_server`, but the only added complexity to the ripple_glasses is the environment buttons that determine which endpoint
+to send the audio file to. To fully test on the development feature pipeline, make sure to toggle to the dev environment (it adds "/dev" to the url). 
+
 ## Changelog
 
 - 1/13/2026 Arduino MKR WiFi 1010 was received
@@ -101,3 +106,4 @@ on your system, follow the steps below for a one-time bind to WSL:
 - 7/28/2026 Migrated to platformIO and updated git repo
 - 8/4/2026: Updated I2S config for deprecated libraries
 - 8/4/2026: Added script for binding devices to platformio running in WSL
+- 9/8/2026: Implemented development environment for feature branching and merging
